@@ -10,6 +10,7 @@ import sys
 
 import requests
 
+from db import TEST_PASSPHRASE, Page
 from zerodbext import api
 
 
@@ -50,10 +51,41 @@ def api_server(request, db):
     return "http://localhost:{}".format(port)
 
 
+def api_connect(api_server, session):
+    return session.post(api_server + '/_connect', json={
+        'username': 'root',
+        'passphrase': TEST_PASSPHRASE
+    })
+
+
+def api_disconnect(api_server, session):
+    return session.post(api_server + '/_disconnect')
+
+
+@pytest.fixture(scope="function")
+def session(request, api_server):
+    """
+    A requests session which has an auth cookie for the test database.
+
+    Calls /_disconnect on finalization.
+    """
+    sess = requests.Session()
+    api_connect(api_server, sess)
+
+    request.addfinalizer(lambda: api_disconnect(api_server, sess))
+
+    return sess
+
+
 def assert_success(response):
     """Asserts that the response has a 200 status and json content type."""
     assert response.status_code == 200
     assert response.headers['Content-Type'] == 'application/json'
+
+
+def assert_forbidden(response):
+    """Asserts that the response is a 403 Forbidden."""
+    assert response.status_code == 403
 
 
 def test_version(api_server):
@@ -64,3 +96,36 @@ def test_version(api_server):
     assert data['zerodb'] == pkg_resources.get_distribution('zerodb').version
     assert data['zerodb-api'] == api.__version__
     assert data['python'] == sys.version
+
+
+def test_connect(api_server):
+    session = requests.Session()
+    resp = api_connect(api_server, session)
+    assert resp.status_code == 204
+
+
+def test_disconnect(api_server):
+    session = requests.Session()
+    api_connect(api_server, session)
+    resp = api_disconnect(api_server, session)
+    assert resp.status_code == 204
+
+
+def test_get(api_server, session, db):
+    page = next(db[Page].all())
+    resp = session.get("{}/Page/{}".format(api_server, page._p_uid))
+    assert_success(resp)
+
+    data = resp.json()
+    assert data['title'] == page.title
+    assert data['text'] == page.text
+    assert data['num'] == page.num
+
+
+def test_get_forbidden(api_server):
+    assert_forbidden(requests.get(api_server + '/Page/0'))
+
+
+def test_get_not_found(api_server, session):
+    resp = session.get(api_server + '/Page/0')
+    assert resp.status_code == 404

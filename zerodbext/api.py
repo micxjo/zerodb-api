@@ -4,6 +4,7 @@ import sys
 
 import pkg_resources
 import six
+import transaction
 import zerodb
 from flask import Flask, jsonify, request, session, abort
 
@@ -115,6 +116,21 @@ def get(model_name, oid):
         abort(404)
     else:
         return jsonify(pickler.flatten(obj))
+
+
+@app.route('/<model_name>/<int:oid>', methods=['DELETE'])
+def delete(model_name, oid):
+    """Deletes an object based on its model name and objectID."""
+    db = session_db_or_403()
+    model = model_or_404(model_name)
+
+    try:
+        with transaction.manager:
+            db[model].remove(oid)
+    except KeyError:
+        abort(404)
+
+    return Flask.response_class(status=204)
 
 
 def run(data_models=None, host=HOST, port=PORT, debug=DEBUG,

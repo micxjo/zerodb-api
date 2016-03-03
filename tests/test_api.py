@@ -129,3 +129,23 @@ def test_get_forbidden(api_server):
 def test_get_not_found(api_server, session):
     resp = session.get(api_server + '/Page/0')
     assert resp.status_code == 404
+
+
+def test_delete(api_server, session, db):
+    oid = next(db[Page].all())._p_uid
+    url = "{}/Page/{}".format(api_server, oid)
+    resp = session.delete(url)
+    assert resp.status_code == 204
+
+    resp = session.get(url)
+    assert resp.status_code == 404
+
+
+def test_delete_forbidden(api_server):
+    assert_forbidden(requests.delete(api_server + '/Page/0'))
+
+
+def test_delete_not_found(api_server, session):
+    # Is 404 appropriate here?
+    resp = session.delete(api_server + '/Page/0')
+    assert resp.status_code == 404

@@ -149,3 +149,32 @@ def test_delete_not_found(api_server, session):
     # Is 404 appropriate here?
     resp = session.delete(api_server + '/Page/0')
     assert resp.status_code == 404
+
+
+def test_insert(api_server, session):
+    obj = {
+        'title': "A title",
+        'text': "Some text",
+        'num': 4
+    }
+
+    resp = session.post(api_server + '/Page', json=obj)
+    assert_success(resp)
+    oid = resp.json()["$oid"]
+
+    resp = session.get("{}/Page/{}".format(api_server, oid))
+    assert_success(resp)
+    assert resp.json() == obj
+
+
+def test_insert_forbidden(api_server):
+    assert_forbidden(requests.post(api_server + '/Page', json={
+        'title': "A title",
+        'text': "Some text",
+        'num': 4
+    }))
+
+
+def test_insert_not_found(api_server, session):
+    resp = session.post(api_server + '/Nonexistent', json={'foo': 'bar'})
+    assert resp.status_code == 404

@@ -133,6 +133,28 @@ def delete(model_name, oid):
     return Flask.response_class(status=204)
 
 
+@app.route('/<model_name>', methods=['POST'])
+def insert(model_name):
+    """Inserts a model object.
+
+    Returns a JSON response containing the newly created objectID.
+    """
+    db = session_db_or_403()
+    model = model_or_404(model_name)
+
+    try:
+        data = request.get_json()
+        obj = model(**data)
+        with transaction.manager:
+            oid = db.add(obj)
+        return jsonify({"$oid": oid})
+    except Exception as ex:
+        resp = jsonify(error=str(ex),
+                       error_class=ex.__class__.__name__)
+        resp.status_code = 400
+        return resp
+
+
 def run(data_models=None, host=HOST, port=PORT, debug=DEBUG,
         secret_key=DEV_SECRET_KEY, zeo_socket=None, **kw):
     """Runs the API server.

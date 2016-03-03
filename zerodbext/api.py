@@ -7,6 +7,8 @@ import six
 import transaction
 import zerodb
 from flask import Flask, jsonify, request, session, abort
+from zerodb.catalog import query_json
+from zerodb.catalog.query import optimize
 
 __version__ = '0.1.0'
 
@@ -153,6 +155,52 @@ def insert(model_name):
                        error_class=ex.__class__.__name__)
         resp.status_code = 400
         return resp
+
+
+# POST is allowed for clients that don't like GET bodies.
+@app.route('/<model_name>/_find', methods=['GET', 'POST'])
+def find(model_name):
+    """Queries the given model.
+
+    Request body should be a JSON object with a 'criteria' member in the
+    ZeroDB query format. Optional 'skip', 'limit' and 'sort' members can be
+    provided.
+    """
+    db = session_db_or_403()
+    model = model_or_404(model_name)
+
+    query = request.get_json()
+    criteria = optimize(query_json.compile(query['criteria']))
+
+    skip = query.get('skip')
+    if skip:
+        skip = int(skip)
+
+    limit = query.get('limit')
+    if limit:
+        limit = int(limit)
+
+    sort = query.get('sort')
+    if isinstance(sort, six.string_types):
+        if sort.startswith('-'):
+            sort_index = sort[1:].strip()
+            reverse = True
+        else:
+            sort_index = sort
+            reverse = None
+    elif isinstance(sort, dict):
+        assert len(sort) == 1
+        sort_index, direction = sort.popitem()
+        reverse = direction >= 0
+    else:
+        sort_index = None
+        reverse = None
+
+    result = db[model].query(criteria, skip=skip, limit=limit,
+                             sort_index=sort_index, reverse=reverse)
+    objs = [pickler.flatten(o) for o in result]
+
+    return jsonify(objects=objs, count=len(objs))
 
 
 def run(data_models=None, host=HOST, port=PORT, debug=DEBUG,

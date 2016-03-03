@@ -178,3 +178,70 @@ def test_insert_forbidden(api_server):
 def test_insert_not_found(api_server, session):
     resp = session.post(api_server + '/Nonexistent', json={'foo': 'bar'})
     assert resp.status_code == 404
+
+
+def test_find(api_server, session):
+    criteria = {'text': {'$text': "something"}}
+
+    resp = session.get(api_server + '/Page/_find', json={
+        'criteria': criteria
+    })
+    assert_success(resp)
+    data = resp.json()
+    assert data['count'] == 10
+    assert len(data['objects']) == 10
+
+    resp = session.get(api_server + '/Page/_find', json={
+        'criteria': criteria,
+        'limit': 9
+    })
+    assert_success(resp)
+    data = resp.json()
+    assert data['count'] == 9
+    assert len(data['objects']) == 9
+
+    # TODO: Test skip w/o limit once the behavior is clarified
+    resp = session.get(api_server + '/Page/_find', json={
+        'criteria': criteria,
+        'skip': 2,
+        'limit': 10
+    })
+    assert_success(resp)
+    data = resp.json()
+    assert data['count'] == 8
+    assert len(data['objects']) == 8
+
+
+def test_find_sort(api_server, session):
+    criteria = {'text': {'$text': "something"}}
+
+    resp = session.get(api_server + '/Page/_find', json={
+        'criteria': criteria,
+        'sort': 'title'
+    })
+    assert_success(resp)
+    data = resp.json()
+    assert data['count'] == 10
+    assert len(data['objects']) == 10
+
+    rev_resp = session.get(api_server + '/Page/_find', json={
+        'criteria': criteria,
+        'sort': '-title'
+    })
+    assert_success(rev_resp)
+    rev_data = rev_resp.json()
+    assert rev_data['count'] == 10
+    assert rev_data['objects'] == list(reversed(data['objects']))
+
+
+def test_find_forbidden(api_server):
+    assert_forbidden(requests.get(api_server + '/Page/_find', json={
+        'title': "Foo"
+    }))
+
+
+def test_find_not_found(api_server, session):
+    resp = session.get(api_server + '/Nonexistent/_find', json={
+        'title': "Foo"
+    })
+    assert resp.status_code == 404
